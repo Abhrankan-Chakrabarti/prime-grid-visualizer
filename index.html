@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Prime Grid Visualizer</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    :root{
+      --prime:#4CAF50;
+      --composite:#F44336;
+      --beyond:#9E9E9E;
+      --special:#2196F3; /* number 1 */
+      --highlight:#FFEB3B;
+      --bg:#ffffff;
+      --accent:#1976D2;
+      --muted:#666;
+    }
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:#111;}
+    .app{display:flex;flex-direction:column;height:100vh;padding:12px;box-sizing:border-box;gap:10px;}
+    .controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
+    .controls input[type="number"], .controls input[type="text"]{
+      padding:6px;border:1px solid #ddd;border-radius:6px;font-size:14px;
+    }
+    .controls label{font-size:13px;color:var(--muted);}
+    button{
+      background:var(--accent);color:#fff;border:0;padding:8px 12px;border-radius:8px;cursor:pointer;
+    }
+    button:disabled{opacity:.5;cursor:not-allowed}
+    .canvas-wrap{
+      flex:1;display:flex;border:1px solid #eee;border-radius:8px;
+      overflow:auto;background:#fafafa;position:relative;
+    }
+    canvas{display:block}
+    .tooltip{
+      position:fixed;pointer-events:none;padding:6px 8px;border-radius:6px;background:#222;color:#fff;
+      font-size:13px;z-index:50;transform:translate(8px,8px);
+      box-shadow:0 6px 18px rgba(0,0,0,.18);display:none;
+    }
+    .status{font-size:13px;color:var(--muted);}
+    .footer{
+      display:flex;flex-direction:column;gap:6px;
+      font-size:13px;color:var(--muted)
+    }
+    .legend{display:flex;gap:8px;align-items:center;margin-bottom:4px;}
+    .legend span{display:inline-flex;align-items:center;gap:6px}
+    .swatch{width:14px;height:14px;border-radius:3px;display:inline-block}
+    .stats-line{font-size:13px;color:#333;}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="controls">
+      <label>n:
+        <input id="nInput" type="number" min="1" value="200" style="width:110px;margin-left:6px">
+      </label>
+
+      <label>columns:
+        <input id="colsInput" type="number" min="5" max="200" value="10" style="width:90px;margin-left:6px">
+      </label>
+
+      <label>cell size:
+        <input id="cellInput" type="number" min="6" max="80" value="36" style="width:90px;margin-left:6px">
+      </label>
+
+      <button id="generateBtn">Generate</button>
+
+      <label style="margin-left:8px">Jump to:
+        <input id="jumpInput" type="number" min="1" placeholder="number" style="width:90px;margin-left:6px">
+      </label>
+      <button id="jumpBtn">Go</button>
+
+      <button id="exportBtn">Export PNG</button>
+
+      <div style="flex:1"></div>
+      <div class="status" id="status">Ready</div>
+    </div>
+
+    <div class="canvas-wrap" id="canvasWrap">
+      <canvas id="gridCanvas"></canvas>
+    </div>
+
+    <div class="footer">
+      <div class="legend">
+        <span><span class="swatch" style="background:var(--prime)"></span> Prime</span>
+        <span><span class="swatch" style="background:var(--composite)"></span> Composite</span>
+        <span><span class="swatch" style="background:var(--special)"></span> Special (1)</span>
+        <span><span class="swatch" style="background:var(--beyond)"></span> Beyond n</span>
+      </div>
+
+      <div id="stats" class="stats-line">—</div>
+    </div>
+  </div>
+
+  <div class="tooltip" id="tooltip"></div>
+
+  <script>
+  /* ---------- Prime Sieve ---------- */
+  function sieve(n){
+    const prime = new Uint8Array(n+1);
+    if(n >= 2){
+      for(let i=2;i<=n;i++) prime[i]=1;
+      const lim = Math.floor(Math.sqrt(n));
+      for(let p=2;p<=lim;p++){
+        if(prime[p]){
+          for(let j=p*p;j<=n;j+=p) prime[j]=0;
+        }
+      }
+    }
+    prime[0] = 0;
+    prime[1] = 2; // special marker: neither prime nor composite
+    return prime;
+  }
+
+  /* ---------- DOM ---------- */
+  const nInput = document.getElementById('nInput');
+  const colsInput = document.getElementById('colsInput');
+  const cellInput = document.getElementById('cellInput');
+  const generateBtn = document.getElementById('generateBtn');
+  const canvas = document.getElementById('gridCanvas');
+  const canvasWrap = document.getElementById('canvasWrap');
+  const tooltip = document.getElementById('tooltip');
+  const status = document.getElementById('status');
+  const statsDiv = document.getElementById('stats');
+  const jumpInput = document.getElementById('jumpInput');
+  const jumpBtn = document.getElementById('jumpBtn');
+  const exportBtn = document.getElementById('exportBtn');
+
+  const COLOR_PRIME = getComputedStyle(document.documentElement).getPropertyValue('--prime').trim();
+  const COLOR_COMPOSITE = getComputedStyle(document.documentElement).getPropertyValue('--composite').trim();
+  const COLOR_BEYOND = getComputedStyle(document.documentElement).getPropertyValue('--beyond').trim();
+  const COLOR_SPECIAL = getComputedStyle(document.documentElement).getPropertyValue('--special').trim();
+  const COLOR_HIGHLIGHT = getComputedStyle(document.documentElement).getPropertyValue('--highlight').trim();
+  const GRID_BG = "#ffffff";
+
+  let state = { n:0, cols:10, cell:36, primeArr:null, rows:0, totalCells:0 };
+
+  /* ---------- Draw Grid ---------- */
+  function drawGrid(highlightCell=null){
+    const { n, cols, cell, primeArr, rows } = state;
+    const w = cols * cell;
+    const h = rows * cell;
+
+    canvas.width = w;
+    canvas.height = h;
+
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = GRID_BG; 
+    ctx.fillRect(0,0,w,h);
+
+    let idx = 1;
+    for(let r=0;r<rows;r++){
+      for(let c=0;c<cols;c++, idx++){
+        const x = c * cell, y = r * cell;
+
+        if(idx === 1) ctx.fillStyle = COLOR_SPECIAL;
+        else if(idx > n) ctx.fillStyle = COLOR_BEYOND;
+        else ctx.fillStyle = (primeArr[idx] === 1 ? COLOR_PRIME : COLOR_COMPOSITE);
+
+        ctx.fillRect(x, y, cell, cell);
+        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+        ctx.strokeRect(x+0.5, y+0.5, cell-1, cell-1);
+      }
+    }
+
+    if(highlightCell){
+      const [r,c] = highlightCell;
+      ctx.save();
+      ctx.globalAlpha = 0.45;
+      ctx.fillStyle = COLOR_HIGHLIGHT;
+      ctx.fillRect(c*cell, r*cell, cell, cell);
+      ctx.restore();
+    }
+  }
+
+  function updateStats(){
+    const { n, cols, primeArr, rows } = state;
+
+    let primeCount = 0, compositeCount = 0, beyondCount = 0, specialCount = 1;
+
+    for(let i=2;i<=n;i++){
+      if(primeArr[i] === 1) primeCount++;
+      else compositeCount++;
+    }
+
+    const colCounts = Array(cols).fill(0);
+    let idx = 1;
+    for(let r=0;r<rows;r++){
+      for(let c=0;c<cols;c++, idx++){
+        if(idx <= n && primeArr[idx] === 1) colCounts[c]++;
+      }
+    }
+
+    statsDiv.textContent = 
+      `Primes: ${primeCount} | Composites: ${compositeCount} | 1: 1 | Beyond: ${state.totalCells - n} | ` +
+      `Prime %: ${(primeCount / n * 100).toFixed(2)}% | Columns: [${colCounts.join(", ")}]`;
+  }
+
+  function updateStatus(msg){ status.textContent = msg; }
+
+  /* ---------- Generate Grid ---------- */
+  function generate(){
+    let n = Math.max(1, Math.floor(Number(nInput.value) || 0));
+    const cols = Math.max(5, Math.min(200, Math.floor(Number(colsInput.value) || 10)));
+    const cell = Math.max(6, Math.min(80, Math.floor(Number(cellInput.value) || 36)));
+
+    updateStatus('Computing primes...');
+    setTimeout(()=>{
+      const t0 = performance.now();
+      const primeArr = sieve(n);
+      const rows = Math.ceil(n / cols) || 1;
+      state = { n, cols, cell, primeArr, rows, totalCells: rows * cols };
+
+      drawGrid();
+      updateStats();
+
+      const t1 = performance.now();
+      updateStatus(`Generated up to ${n} in ${Math.round(t1-t0)} ms`);
+    }, 10);
+  }
+
+  /* ---------- Tooltip ---------- */
+  canvas.addEventListener('mousemove', ev=>{
+    const rect = canvas.getBoundingClientRect();
+    const x = ev.clientX - rect.left;
+    const y = ev.clientY - rect.top;
+    const col = Math.floor(x / state.cell);
+    const row = Math.floor(y / state.cell);
+
+    if(col < 0 || row < 0 || col >= state.cols || row >= state.rows){
+      tooltip.style.display = 'none';
+      return;
+    }
+
+    const index = row * state.cols + col + 1;
+    tooltip.style.display = 'block';
+    tooltip.style.left = (ev.clientX + 12) + 'px';
+    tooltip.style.top = (ev.clientY + 12) + 'px';
+
+    if(index === 1){
+      tooltip.textContent = `1 — neither prime nor composite`;
+    } else if(index > state.n){
+      tooltip.textContent = `${index} (beyond n)`;
+    } else {
+      tooltip.textContent =
+        `${index} — ${state.primeArr[index] ? 'prime' : 'composite'}`;
+    }
+  });
+
+  canvas.addEventListener('mouseleave', ()=> tooltip.style.display = 'none');
+
+  /* ---------- Jump to Number ---------- */
+  function jumpToNumber(num){
+    if(!state.primeArr) return;
+    num = Math.max(1, Math.min(state.totalCells, Math.floor(num) || 1));
+    const idx = num - 1;
+
+    const row = Math.floor(idx / state.cols);
+    const col = idx % state.cols;
+
+    const targetX = col * state.cell;
+    const targetY = row * state.cell;
+
+    const wrapRect = canvasWrap.getBoundingClientRect();
+    const scrollLeft = Math.max(0, targetX - wrapRect.width/2 + state.cell/2);
+    const scrollTop  = Math.max(0, targetY - wrapRect.height/2 + state.cell/2);
+
+    canvasWrap.scrollTo({left:scrollLeft, top:scrollTop, behavior:'smooth'});
+
+    drawGrid([row, col]);
+    setTimeout(()=> drawGrid(), 220);
+  }
+
+  jumpBtn.addEventListener('click', ()=>{
+    const val = Number(jumpInput.value);
+    if(val) jumpToNumber(val);
+  });
+
+  /* ---------- Export PNG ---------- */
+  exportBtn.addEventListener('click', ()=>{
+    if(!state.primeArr) return;
+    const url = canvas.toDataURL('image/png');
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `prime-grid-n${state.n}.png`;
+    a.click();
+  });
+
+  /* ---------- Events ---------- */
+  generateBtn.addEventListener('click', ()=>{
+    generateBtn.disabled = true;
+    setTimeout(()=>{ generate(); generateBtn.disabled = false; }, 10);
+  });
+
+  nInput.addEventListener('keydown', e=>{
+    if(e.key==='Enter') generateBtn.click();
+  });
+
+  jumpInput.addEventListener('keydown', e=>{
+    if(e.key==='Enter') jumpBtn.click();
+  });
+
+  window.addEventListener('load', ()=> generate());
+  </script>
+</body>
+</html>
