@@ -1,10 +1,14 @@
 # Prime Grid Visualizer
 
-A fast and interactive **prime number grid visualizer** that runs entirely in your browser. It uses an optimized Sieve of Eratosthenes to generate primes and displays them in a color‑coded, scrollable grid.
+A fast, interactive **prime number grid visualizer** that runs entirely in your browser.
+It uses an optimized Sieve of Eratosthenes and renders numbers using an HTML `<canvas>` for smooth performance even at large values of **n**.
 
-🎨 **Prime = Green**
-❌ **Composite = Red**
-⬜ **Beyond n = Grey**
+### 🎨 Color Legend
+
+* 🟩 **Prime** — Green
+* 🟥 **Composite** — Red
+* 🔵 **1 (Special)** — Neither prime nor composite
+* ⬜ **Beyond n** — Grey
 
 ---
 
@@ -19,12 +23,16 @@ https://abhrankan-chakrabarti.github.io/prime-grid-visualizer/
 ## 🚀 Features
 
 * Adjustable **n**, **columns**, and **cell size**
-* Smooth scrolling with auto-sizing canvas
-* Hover tooltip showing number + classification
-* "Jump to number" navigation with highlight
+* Optimized **Sieve of Eratosthenes** in JavaScript
+* Canvas-based rendering for **high performance**
+* Hover tooltip with number + classification
+* **Jump to number** navigation with yellow highlight flash
+* Auto-centering scroll when jumping
+* **Compact statistics section**
+  (Prime count, Composite count, Prime %, Column-wise distribution)
 * **Export grid as PNG**
 * Works fully offline
-* Canvas‑based rendering for high performance
+* Clean, responsive interface
 
 ---
 
@@ -49,27 +57,42 @@ README.md    # Documentation
 
 ### 1. Prime Sieve
 
-The app uses a fast JavaScript Sieve of Eratosthenes.
+A fast implementation of the Sieve of Eratosthenes is used to classify every number up to **n**:
+
+* `1` is treated as a **special case**
+* Primes marked in green
+* Composites in red
+* Numbers beyond `n` in grey
 
 ### 2. Canvas Rendering
 
-Each number is drawn as a colored square using `<canvas>` for maximum performance.
+The grid is drawn using `<canvas>`, allowing:
 
-### 3. Smooth Navigation
+* Smooth panning
+* Fast updates even with thousands of cells
+* PNG export capability
 
-Jump navigation scrolls and centers the target cell and briefly highlights it.
+### 3. Jump Navigation
+
+Entering a number:
+
+* Scrolls to its cell
+* Centers it in the view
+* Highlights it briefly
+
+Useful for exploring patterns in prime distribution.
 
 ---
 
 ## 🛠 Hosting on GitHub Pages
 
-1. Open **Settings → Pages**
-2. Set:
+1. Go to **Settings → Pages**
+2. Choose:
 
    * **Source:** Deploy from branch
    * **Branch:** `main`
-   * **Folder:** `/root`
-3. Save and open the published link.
+   * **Folder:** `/` (root)
+3. Save and open your published link.
 
 ---
 
@@ -87,4 +110,4 @@ MIT License
 
 ## ⭐ Support the Project
 
-If you enjoy this visualizer, leave a **star** on GitHub!
+If you enjoy this visualizer, please consider leaving a **star** ⭐ on GitHub!
