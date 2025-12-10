@@ -14,9 +14,7 @@ It uses an optimized Sieve of Eratosthenes and renders numbers using an HTML `<c
 
 ## 🔗 Live Demo
 
-```
-https://abhrankan-chakrabarti.github.io/prime-grid-visualizer/
-```
+[https://abhrankan-chakrabarti.github.io/prime-grid-visualizer/](https://abhrankan-chakrabarti.github.io/prime-grid-visualizer/)
 
 ---
 
@@ -38,9 +36,7 @@ https://abhrankan-chakrabarti.github.io/prime-grid-visualizer/
 
 ## 📸 Screenshot
 
-```
 ![Prime Grid Screenshot](screenshot.png)
-```
 
 ---
 
